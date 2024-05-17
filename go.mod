@@ -1,12 +1,29 @@
-module github.com/stsg/gophermart
+module github.com/stsg/gophkeeper
 
 go 1.22.3
 
 require (
-	github.com/fatih/color v1.17.0 // indirect
-	github.com/go-pkgz/lgr v0.11.1 // indirect
+	github.com/fatih/color v1.17.0
+	github.com/go-chi/chi/v5 v5.0.12
+	github.com/go-pkgz/lgr v0.11.1
+	github.com/go-pkgz/rest v1.19.0
+	github.com/shirou/gopsutil/v3 v3.24.4
+	github.com/stretchr/testify v1.9.0
+	github.com/umputun/go-flags v1.5.1
+	gopkg.in/yaml.v3 v3.0.1
+)
+
+require (
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/go-ole/go-ole v1.2.6 // indirect
+	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/umputun/go-flags v1.5.1 // indirect
-	golang.org/x/sys v0.18.0 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
+	github.com/shoenig/go-m1cpu v0.1.6 // indirect
+	github.com/tklauser/go-sysconf v0.3.12 // indirect
+	github.com/tklauser/numcpus v0.6.1 // indirect
+	github.com/yusufpapurcu/wmi v1.2.4 // indirect
+	golang.org/x/sys v0.19.0 // indirect
 )
