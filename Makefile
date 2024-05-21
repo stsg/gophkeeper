@@ -30,6 +30,9 @@ tidy:
 run:
 	go run -ldflags "-X main.revision=$(REV) -s -w" cmd/server/main.go --dbg
 
+runclient:
+	go run -ldflags "-X main.revision=$(REV) -s -w" cmd/client/main.go --dbg
+
 lint:
 	@ echo
 	@ echo "Linting"
