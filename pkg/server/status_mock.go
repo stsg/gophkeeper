@@ -6,7 +6,7 @@ package server
 import (
 	"sync"
 
-	"github.com/stsg/gophkeeper/app/status"
+	"github.com/stsg/gophkeeper/pkg/status"
 )
 
 // StatusMock is a mock implementation of Status.

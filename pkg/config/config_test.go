@@ -17,14 +17,14 @@ func TestNew(t *testing.T) {
 	{
 		p, err := New("testdata/config.yml")
 		require.NoError(t, err)
-		assert.Equal(t, []Volume{{Name: "root", Path: "/hostroot"}, {Name: "data", Path: "/data"}}, p.Volumes)
+		assert.Equal(t, []Data{{Name: "data01", Value: "value01"}, {Name: "data02", Value: "value02"}}, p.DataSet)
 	}
 }
 
-func TestParameters_MarshalVolumes(t *testing.T) {
+func TestParameters_MarshalDataSet(t *testing.T) {
 	p, err := New("testdata/config.yml")
 	require.NoError(t, err)
-	assert.Equal(t, []string{"root:/hostroot", "data:/data"}, p.MarshalVolumes())
+	assert.Equal(t, []string{"data01:value01", "data02:value02"}, p.MarshalDataSet())
 }
 
 func TestParameters_String(t *testing.T) {
@@ -32,7 +32,7 @@ func TestParameters_String(t *testing.T) {
 	require.NoError(t, err)
 
 	exp := Parameters{
-		Volumes:  []Volume{{Name: "root", Path: "/hostroot"}, {Name: "data", Path: "/data"}},
+		DataSet:  []Data{{Name: "data01", Value: "value01"}, {Name: "data02", Value: "value02"}},
 		filename: "testdata/config.yml",
 	}
 	assert.Equal(t, exp, *p)

@@ -10,14 +10,14 @@ import (
 
 // Parameters contains all parameters for the application
 type Parameters struct {
-	Volumes  []Volume `yaml:"volumes"`
-	filename string   `yaml:"filename"`
+	DataSet  []Data `yaml:"data"`
+	filename string `yaml:"filename"`
 }
 
-// Volume represents a volumes to check
-type Volume struct {
-	Name string `yaml:"name"`
-	Path string `yaml:"path"`
+// Data represents a volumes to check
+type Data struct {
+	Name  string `yaml:"name"`
+	Value string `yaml:"value"`
 }
 
 // New creates new Parameters from the given filename
@@ -45,10 +45,10 @@ func (p *Parameters) String() string {
 }
 
 // MarshalVolumes returns the volumes as a list of strings with the format "name:path"
-func (p *Parameters) MarshalVolumes() []string {
-	res := make([]string, 0, len(p.Volumes))
-	for _, v := range p.Volumes {
-		res = append(res, fmt.Sprintf("%s:%s", v.Name, v.Path))
+func (p *Parameters) MarshalDataSet() []string {
+	res := make([]string, 0, len(p.DataSet))
+	for _, v := range p.DataSet {
+		res = append(res, fmt.Sprintf("%s:%s", v.Name, v.Value))
 	}
 	return res
 }

@@ -10,7 +10,7 @@ build: info
 	@ echo
 	@ echo "Compiling Binary"
 	@ echo
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-X main.revision=$(REV) -s -w" -o bin/gophkeeper app/main.go
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-X main.revision=$(REV) -s -w" -o bin/gophkeeper cmd/server/main.go
 
 docker:
 	docker build -t starky/gophkeeper:master .
@@ -28,7 +28,7 @@ tidy:
 	go mod tidy
 
 run:
-	go run -ldflags "-X main.revision=$(REV) -s -w" app/main.go --dbg
+	go run -ldflags "-X main.revision=$(REV) -s -w" cmd/server/main.go --dbg
 
 lint:
 	@ echo
@@ -40,7 +40,7 @@ test:
 	@ echo
 	@ echo "Testing"
 	@ echo
-	go test
+	go test ./...
 
 .PHONY: *
 

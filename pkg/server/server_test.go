@@ -10,7 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/stsg/gophkeeper/app/status"
+
+	"github.com/stsg/gophkeeper/pkg/status"
 )
 
 func TestRest_Run(t *testing.T) {
@@ -25,7 +26,7 @@ func TestRest_Run(t *testing.T) {
 func TestStatusCtrl(t *testing.T) {
 	sts := &StatusMock{
 		GetFunc: func() (*status.Info, error) {
-			return &status.Info{CPUPercent: 12, Volumes: map[string]status.Volume{"v1": {Name: "v1", Path: "/p1", UsagePercent: 5}}}, nil
+			return &status.Info{CPUPercent: 12}, nil
 		},
 	}
 	srv := Rest{Listen: "localhost:54009", Status: sts, Version: "v1"}
@@ -40,7 +41,6 @@ func TestStatusCtrl(t *testing.T) {
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	t.Log(string(body))
-	assert.Contains(t, string(body), `"volumes":`, string(body))
 	assert.Contains(t, string(body), `"mem_percent":`, string(body))
 	assert.Contains(t, string(body), `"cpu_percent":`, string(body))
 	assert.Contains(t, string(body), `"uptime":`, string(body))

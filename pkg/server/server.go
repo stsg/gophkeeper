@@ -13,8 +13,8 @@ import (
 	"github.com/go-pkgz/rest"
 	"github.com/go-pkgz/rest/logger"
 
-	"github.com/stsg/gophkeeper/app/config"
-	"github.com/stsg/gophkeeper/app/status"
+	"github.com/stsg/gophkeeper/pkg/config"
+	"github.com/stsg/gophkeeper/pkg/status"
 )
 
 type Rest struct {

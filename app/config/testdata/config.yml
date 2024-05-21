@@ -1,3 +1,0 @@
-volumes:
-  - {name: root, path: /hostroot}
-  - {name: data, path: /data}
