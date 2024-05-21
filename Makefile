@@ -11,6 +11,7 @@ build: info
 	@ echo "Compiling Binary"
 	@ echo
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-X main.revision=$(REV) -s -w" -o bin/gophkeeper cmd/server/main.go
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-X main.revision=$(REV) -s -w" -o bin/gpk-client cmd/client/main.go
 
 docker:
 	docker build -t starky/gophkeeper:master .
