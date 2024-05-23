@@ -15,13 +15,17 @@ import (
 
 	"github.com/stsg/gophkeeper/pkg/config"
 	"github.com/stsg/gophkeeper/pkg/status"
+	postgres "github.com/stsg/gophkeeper/pkg/store"
 )
 
 type Rest struct {
-	Listen  string
-	Version string
-	Status  Status
-	Config  *config.Parameters
+	Listen   string
+	Version  string
+	Status   Status
+	Config   *config.Parameters
+	Store    *postgres.Storage
+	Secret   []byte
+	LifeSpan time.Duration
 }
 
 type Status interface {
@@ -64,10 +68,14 @@ func (s *Rest) router() http.Handler {
 	router.Use(logger.New(logger.Log(log.Default()), logger.WithBody, logger.Prefix("[DEBUG]")).Handler)
 	router.Use(rest.Gzip("application/json", "text/html"))
 	router.Use(middleware.Compress(5, "application/json", "text/html"))
+	router.Use(rest.BasicAuth(s.Auth))
 
 	router.Route("/", func(r chi.Router) {
 		r.Get("/echo", s.echo)
 		r.Get("/status", s.status)
+		r.Post("/register", s.Register)
+		r.Post("/login", s.Login)
+		r.Post("/vault", s.Vault)
 	})
 
 	return router
@@ -102,4 +110,22 @@ func (s *Rest) status(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rest.RenderJSON(w, info)
+}
+
+func (s *Rest) Auth(login string, password string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	user, error := s.Store.GetUserByLogin(ctx, login)
+	if error != nil {
+		log.Printf("[ERROR] failed to get user: %v", error)
+		return false
+	}
+
+	if user.Passw != password {
+		log.Printf("[ERROR] wrong password: %v", error)
+		return false
+	}
+
+	return true
 }

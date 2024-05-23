@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"os"
@@ -17,15 +18,19 @@ import (
 	"github.com/stsg/gophkeeper/pkg/config"
 	"github.com/stsg/gophkeeper/pkg/server"
 	"github.com/stsg/gophkeeper/pkg/status"
+	postgres "github.com/stsg/gophkeeper/pkg/store"
 )
 
 var revision string
 
 var opts struct {
-	Config  string        `short:"f" long:"config" env:"CONFIG" description:"config file"`
-	Listen  string        `short:"l" long:"listen" env:"LISTEN" default:"localhost:8080" description:"listen address"`
-	Timeout time.Duration `short:"t" long:"timeout" env:"TIMEOUT" default:"10s" description:"connection timeout"`
-	Dbg     bool          `long:"dbg" env:"DEBUG" description:"show debug info"`
+	Config   string        `short:"f" long:"config" env:"CONFIG" description:"config file"`
+	Listen   string        `short:"l" long:"listen" env:"LISTEN" default:"localhost:8080" description:"listen address"`
+	DBURI    string        `short:"d" long:"dburi" env:"DBURI" default:"postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable" description:"database connection string"`
+	Timeout  time.Duration `short:"t" long:"timeout" env:"TIMEOUT" default:"10s" description:"connection timeout"`
+	Secret   string        `short:"s" long:"secret" env:"SECRET" required:"true" description:"Base64 encoded JWT Token secret"`
+	Lifespan time.Duration `long:"lifespan" env:"LIFESPAN" default:"15m" description:"JWT Token lifespan in milliseconds"`
+	Dbg      bool          `long:"dbg" env:"DEBUG" description:"show debug info"`
 }
 
 func main() {
@@ -68,11 +73,31 @@ func main() {
 		log.Printf("[DEBUG] loaded config: %s", conf.String())
 	}
 
+	pCfg := postgres.Config{
+		ConnectionString: opts.DBURI,
+		ConnectTimeout:   opts.Timeout,
+		MigrationVersion: 1,
+	}
+
+	postgres, err := postgres.New(&pCfg)
+	if err != nil {
+		log.Printf("[ERROR] can't connect to postgres: %s", err)
+		os.Exit(1)
+	}
+
+	var secret, decodeErr = base64.RawStdEncoding.DecodeString(opts.Secret)
+	if err != nil {
+		log.Fatalf("failed to parse token secret: %s", decodeErr.Error())
+	}
+
 	srv := server.Rest{
-		Listen:  opts.Listen,
-		Version: revision,
-		Config:  conf,
-		Status:  &status.Host{},
+		Listen:   opts.Listen,
+		Version:  revision,
+		Config:   conf,
+		Status:   &status.Host{},
+		Store:    postgres,
+		Secret:   secret,
+		LifeSpan: opts.Lifespan,
 	}
 
 	if err := srv.Run(ctx); err != nil && err.Error() != "http: Server closed" {

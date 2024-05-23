@@ -71,7 +71,7 @@ func (p *Storage) GetUserByLogin(ctx context.Context, login string) (User, error
 
 	err := p.db.QueryRow(
 		ctx,
-		"SELECT uid, login, password FROM users WHERE login=$1", login).Scan(
+		"SELECT id, passw FROM identities WHERE id=$1", login).Scan(
 		&user.Login,
 		&user.Passw,
 	)
@@ -90,7 +90,7 @@ func (p *Storage) GetUserByUUID(ctx context.Context, uid uuid.UUID) (User, error
 
 	err := p.db.QueryRow(
 		ctx,
-		"SELECT uid, login, password FROM users WHERE uid=$1", uid).Scan(
+		"SELECT id, passw FROM users WHERE uid=$1", uid).Scan(
 		&user.Login,
 		&user.Passw,
 	)
