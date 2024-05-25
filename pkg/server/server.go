@@ -23,6 +23,7 @@ type Rest struct {
 	Version  string
 	Status   Status
 	Config   *config.Parameters
+	Timeout  time.Duration
 	Store    *postgres.Storage
 	Secret   []byte
 	LifeSpan time.Duration
@@ -116,7 +117,7 @@ func (s *Rest) Auth(login string, password string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	user, error := s.Store.GetUserByLogin(ctx, login)
+	user, error := s.Store.GetIdentity(ctx, login)
 	if error != nil {
 		log.Printf("[ERROR] failed to get user: %v", error)
 		return false
