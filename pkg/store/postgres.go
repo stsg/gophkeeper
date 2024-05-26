@@ -78,22 +78,22 @@ func New(cfg *Config) (*Storage, error) {
 	return &Storage{cfg: cfg, db: pool}, nil
 }
 
-func (p *Storage) GetIdentity(ctx context.Context, login string) (Identity, error) {
-	var i Identity
+func (p *Storage) GetIdentity(ctx context.Context, login string) (Creds, error) {
+	var c Creds
 
 	err := p.db.QueryRow(
 		ctx,
 		"SELECT id, passw FROM identities WHERE id=$1", login).Scan(
-		&i.Login,
-		&i.Passw,
+		&c.Login,
+		&c.Passw,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return Identity{}, ErrNoExists
+			return Creds{}, ErrNoExists
 		}
-		return Identity{}, err
+		return Creds{}, err
 	}
-	return i, nil
+	return c, nil
 }
 
 func (p *Storage) Register(ctx context.Context, c Creds) error {

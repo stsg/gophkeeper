@@ -43,11 +43,6 @@ type (
 	ResourceType int
 )
 
-type Identity struct {
-	Login string
-	Passw string
-}
-
 type Piece struct {
 	Content []byte // Content of the piece.
 	Meta    string // Meta info of the piece.

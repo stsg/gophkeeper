@@ -76,7 +76,7 @@ func (s *Rest) router() http.Handler {
 		r.Get("/status", s.status)
 		r.Post("/register", s.Register)
 		r.Post("/login", s.Login)
-		r.Post("/vault", s.Vault)
+		r.Mount("/vault", s.VaultRoute())
 	})
 
 	return router

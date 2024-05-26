@@ -3,12 +3,10 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5/middleware"
 	log "github.com/go-pkgz/lgr"
-	"github.com/go-pkgz/rest"
 	"github.com/pkg/errors"
 
 	postgres "github.com/stsg/gophkeeper/pkg/store"
@@ -20,7 +18,6 @@ type Creds struct {
 }
 
 func (s *Rest) Register(w http.ResponseWriter, r *http.Request) {
-	// TODO: implement
 	var rBody map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&rBody); err != nil {
 		var status = http.StatusBadRequest
@@ -59,22 +56,60 @@ func (s *Rest) Register(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusConflict)
 			return
 		}
+		if errors.Is(err, postgres.ErrNoExists) {
+			w.WriteHeader(http.StatusBadRequest)
+		}
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	log.Printf("[INFO] login %s registered RegisterHook", c.Login)
-	rest.RenderJSON(w, c)
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *Rest) Login(w http.ResponseWriter, r *http.Request) {
-	// TODO: implement me
-	rest.SendErrorJSON(w, r, log.Default(), http.StatusNotImplemented, fmt.Errorf("not yet implemented"), "not yet implemented")
+	var rBody map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&rBody); err != nil {
+		var status = http.StatusBadRequest
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
 
-}
+	ctx, cancel := context.WithTimeout(r.Context(), s.Timeout)
+	defer cancel()
 
-func (s *Rest) Vault(w http.ResponseWriter, r *http.Request) {
-	// TODO: implement me
-	rest.SendErrorJSON(w, r, log.Default(), http.StatusNotImplemented, fmt.Errorf("not yet implemented"), "not yet implemented")
+	reqID := middleware.GetReqID(ctx)
+	log.Printf("[INFO] reqID %s LoginHook", reqID)
 
+	var c postgres.Creds
+
+	if val, ok := rBody["username"].(string); ok {
+		c.Login = val
+	} else {
+		var status = http.StatusBadRequest
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+
+	if val, ok := rBody["password"].(string); ok {
+		c.Passw = val
+	} else {
+		var status = http.StatusBadRequest
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+
+	token, err := s.Store.Authenticate(ctx, c)
+	if err != nil {
+		if errors.Is(err, postgres.ErrUniqueViolation) {
+			w.WriteHeader(http.StatusConflict)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[INFO] login %s logged LoginHook", c.Login)
+	w.Header().Set("Authorization", token)
+	w.WriteHeader(http.StatusOK)
 }
