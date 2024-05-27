@@ -27,7 +27,6 @@ type Storage struct {
 	db       *pgxpool.Pool
 	EncdP    *base64.Encoding
 	BlobsDir string
-
 	Secret   []byte
 	LifeSpan time.Duration
 }

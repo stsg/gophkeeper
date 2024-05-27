@@ -1,7 +1,9 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -106,10 +108,134 @@ func (s *Rest) VaultDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Rest) VaultPieceRoute() http.Handler {
-	// TODO: implement me
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rest.SendErrorJSON(w, r, log.Default(), http.StatusNotImplemented, fmt.Errorf("not yet implemented"), "not yet implemented")
-	})
+	router := chi.NewRouter()
+	router.Put("/", s.VaultPieceEncrypt)
+	router.Get("/{rid}", s.VaultPieceDecrypt)
+	return router
+}
+
+func (s *Rest) VaultPieceEncrypt(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), s.Timeout)
+	defer cancel()
+
+	reqID := middleware.GetReqID(ctx)
+	log.Printf("[INFO] reqID %s VaultDeleteHook", reqID)
+
+	token := r.Header.Get("Authorization")
+	creds, err := s.Store.Identity(ctx, token)
+	if err != nil {
+		var status = http.StatusInternalServerError
+		if errors.Is(err, postgres.ErrUserUnauthorized) {
+			status = http.StatusUnauthorized
+		}
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+
+	var request struct {
+		Meta    string `json:"meta"`
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		var status = http.StatusBadRequest
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+	var content = make([]byte, len(request.Content))
+	if _, err := base64.RawStdEncoding.Decode(content, ([]byte)(request.Content)); err != nil {
+		var status = http.StatusBadRequest
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+
+	var piece = postgres.Piece{
+		Meta:    request.Meta,
+		Content: content,
+	}
+	var password = r.Header.Get("X-Password")
+	if password == "" {
+		var status = http.StatusUnauthorized
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+	rid, err := s.Store.StorePiece(ctx, piece, creds)
+	if err != nil {
+		var status = http.StatusInternalServerError
+		if errors.Is(err, postgres.ErrUserUnauthorized) {
+			status = http.StatusUnauthorized
+		}
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	var response struct {
+		RID int64 `json:"rid"`
+	}
+	response.RID = (int64)(rid)
+	if err := json.NewEncoder(w).Encode(&response); err != nil {
+		log.Printf("Failed to write response: %s", err.Error())
+	}
+}
+
+func (s *Rest) VaultPieceDecrypt(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), s.Timeout)
+	defer cancel()
+
+	reqID := middleware.GetReqID(ctx)
+	log.Printf("[INFO] reqID %s VaultPieceDecryptHook", reqID)
+
+	token := r.Header.Get("Authorization")
+	creds, err := s.Store.Identity(ctx, token)
+	if err != nil {
+		var status = http.StatusInternalServerError
+		if errors.Is(err, postgres.ErrUserUnauthorized) {
+			status = http.StatusUnauthorized
+		}
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+
+	password := r.Header.Get("X-Password")
+	if password == "" {
+		var status = http.StatusUnauthorized
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+
+	rid, err := strconv.Atoi(chi.URLParam(r, "rid"))
+	if err != nil {
+		var status = http.StatusBadRequest
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+
+	piece, err := s.Store.RestorePiece(ctx, (postgres.ResourceID)(rid), creds)
+	if err != nil {
+		var status = http.StatusInternalServerError
+		if errors.Is(err, postgres.ErrUserUnauthorized) {
+			status = http.StatusUnauthorized
+		}
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+
+	var response struct {
+		Meta    string `json:"meta"`
+		Content string `json:"content"`
+	}
+	response.Meta = piece.Meta
+	response.Content = base64.RawStdEncoding.EncodeToString(
+		bytes.ReplaceAll(
+			piece.Content,
+			[]byte{'\x00'},
+			[]byte{},
+		),
+	)
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Failed to write response: %s", err.Error())
+	}
 }
 
 func (s *Rest) VaultBlobRoute() http.Handler {
