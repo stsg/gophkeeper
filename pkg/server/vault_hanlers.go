@@ -1,19 +1,18 @@
 package server
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	log "github.com/go-pkgz/lgr"
-	"github.com/go-pkgz/rest"
 
 	postgres "github.com/stsg/gophkeeper/pkg/store"
 )
@@ -174,7 +173,7 @@ func (s *Rest) VaultPieceEncrypt(w http.ResponseWriter, r *http.Request) {
 	}
 	response.RID = (int64)(rid)
 	if err := json.NewEncoder(w).Encode(&response); err != nil {
-		log.Printf("Failed to write response: %s", err.Error())
+		log.Printf("[ERROR] failed to write response: %s", err.Error())
 	}
 }
 
@@ -196,8 +195,8 @@ func (s *Rest) VaultPieceDecrypt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	password := r.Header.Get("X-Password")
-	if password == "" {
+	creds.Passw = r.Header.Get("X-Password")
+	if creds.Passw == "" {
 		var status = http.StatusUnauthorized
 		http.Error(w, http.StatusText(status), status)
 		return
@@ -234,13 +233,103 @@ func (s *Rest) VaultPieceDecrypt(w http.ResponseWriter, r *http.Request) {
 	)
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("Failed to write response: %s", err.Error())
+		log.Printf("[ERROR] failed to write response: %s", err.Error())
 	}
 }
 
 func (s *Rest) VaultBlobRoute() http.Handler {
-	// TODO: implement me
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rest.SendErrorJSON(w, r, log.Default(), http.StatusNotImplemented, fmt.Errorf("not yet implemented"), "not yet implemented")
-	})
+	router := chi.NewRouter()
+	router.Put("/", s.VaultBLobEncrypt)
+	router.Get("/{rid}", s.VaultBLobDecrypt)
+	return router
+}
+
+func (s *Rest) VaultBLobEncrypt(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), s.Timeout)
+	defer cancel()
+
+	var creds postgres.Creds
+	creds.Passw = r.Header.Get("X-Password")
+	if creds.Passw == "" {
+		var status = http.StatusUnauthorized
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+
+	blob := postgres.Blob{
+		Meta:    r.Header.Get("X-Meta"),
+		Content: r.Body,
+	}
+	rid, err := s.Store.StoreBlob(ctx, blob, creds)
+	if err != nil {
+		var status = http.StatusInternalServerError
+		if errors.Is(err, postgres.ErrUserUnauthorized) {
+			status = http.StatusUnauthorized
+		}
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	var response struct {
+		RID int64 `json:"rid"`
+	}
+	response.RID = (int64)(rid)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("[ERROR] Failed to write response: %s", err.Error())
+	}
+}
+
+func (s *Rest) VaultBLobDecrypt(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), s.Timeout)
+	defer cancel()
+
+	token := r.Header.Get("Authorization")
+	creds, err := s.Store.Identity(ctx, token)
+	if err != nil {
+		var status = http.StatusInternalServerError
+		if errors.Is(err, postgres.ErrUserUnauthorized) {
+			status = http.StatusUnauthorized
+		}
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+
+	rid, err := strconv.Atoi(chi.URLParam(r, "rid"))
+	if err != nil {
+		var status = http.StatusBadRequest
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+
+	creds.Passw = r.Header.Get("X-Password")
+	if creds.Passw == "" {
+		var status = http.StatusBadRequest
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+
+	blob, err := s.Store.RestoreBlob(ctx, (postgres.ResourceID)(rid), creds)
+	if err != nil {
+		var status = http.StatusInternalServerError
+		if errors.Is(err, postgres.ErrUserUnauthorized) {
+			status = http.StatusUnauthorized
+		}
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+	defer blob.Content.Close()
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", "attachment")
+	w.Header().Set("X-Meta", blob.Meta)
+	w.WriteHeader(http.StatusOK)
+
+	output := bufio.NewWriter(w)
+	if _, err := output.ReadFrom(blob.Content); err != nil {
+		log.Printf("[ERROR] failed to write content: %s", err.Error())
+	}
+	if err := output.Flush(); err != nil {
+		log.Printf("[ERROR] failed to flush content: %s", err.Error())
+	}
 }
