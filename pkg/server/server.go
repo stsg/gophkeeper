@@ -67,6 +67,7 @@ func (s *Rest) router() http.Handler {
 	router.Use(rest.AppInfo("gophkeeper", "sartorus", s.Version))
 	router.Use(rest.Ping)
 	router.Use(logger.New(logger.Log(log.Default()), logger.WithBody, logger.Prefix("[DEBUG]")).Handler)
+	router.Use(middleware.Timeout(s.Timeout))
 	router.Use(rest.Gzip("application/json", "text/html"))
 	router.Use(middleware.Compress(5, "application/json", "text/html"))
 	router.Use(rest.BasicAuth(s.Auth))

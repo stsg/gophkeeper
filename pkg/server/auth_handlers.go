@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 
@@ -12,44 +11,27 @@ import (
 	postgres "github.com/stsg/gophkeeper/pkg/store"
 )
 
-type Creds struct {
-	Login string `json:"username"`
-	Passw string `json:"password"`
-}
-
 func (s *Rest) Register(w http.ResponseWriter, r *http.Request) {
-	var rBody map[string]any
-	if err := json.NewDecoder(r.Body).Decode(&rBody); err != nil {
-		var status = http.StatusBadRequest
-		http.Error(w, http.StatusText(status), status)
+	var cr postgres.Creds
+	if err := json.NewDecoder(r.Body).Decode(&cr); err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), s.Timeout)
-	defer cancel()
-
-	reqID := middleware.GetReqID(ctx)
+	reqID := middleware.GetReqID(r.Context())
 	log.Printf("[INFO] reqID %s RegisterHook", reqID)
 
-	var c postgres.Creds
-
-	if val, ok := rBody["username"].(string); ok {
-		c.Login = val
-	} else {
-		var status = http.StatusBadRequest
-		http.Error(w, http.StatusText(status), status)
+	if cr.Login == "" {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
-	if val, ok := rBody["password"].(string); ok {
-		c.Passw = val
-	} else {
-		var status = http.StatusBadRequest
-		http.Error(w, http.StatusText(status), status)
+	if cr.Passw == "" {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
-	err := s.Store.Register(ctx, c)
+	err := s.Store.Register(r.Context(), cr)
 
 	if err != nil {
 		if errors.Is(err, postgres.ErrUniqueViolation) {
@@ -58,48 +40,37 @@ func (s *Rest) Register(w http.ResponseWriter, r *http.Request) {
 		}
 		if errors.Is(err, postgres.ErrNoExists) {
 			w.WriteHeader(http.StatusBadRequest)
+			return
 		}
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("[INFO] login %s registered RegisterHook", c.Login)
+	log.Printf("[INFO] login %s registered RegisterHook", cr.Login)
 	w.WriteHeader(http.StatusOK)
 }
 
 func (s *Rest) Login(w http.ResponseWriter, r *http.Request) {
-	var rBody map[string]any
-	if err := json.NewDecoder(r.Body).Decode(&rBody); err != nil {
-		var status = http.StatusBadRequest
-		http.Error(w, http.StatusText(status), status)
+	var cr postgres.Creds
+	if err := json.NewDecoder(r.Body).Decode(&cr); err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), s.Timeout)
-	defer cancel()
-
-	reqID := middleware.GetReqID(ctx)
+	reqID := middleware.GetReqID(r.Context())
 	log.Printf("[INFO] reqID %s LoginHook", reqID)
 
-	var c postgres.Creds
-
-	if val, ok := rBody["username"].(string); ok {
-		c.Login = val
-	} else {
-		var status = http.StatusBadRequest
-		http.Error(w, http.StatusText(status), status)
+	if cr.Login == "" {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
-	if val, ok := rBody["password"].(string); ok {
-		c.Passw = val
-	} else {
-		var status = http.StatusBadRequest
-		http.Error(w, http.StatusText(status), status)
+	if cr.Passw == "" {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
-	token, err := s.Store.Authenticate(ctx, c)
+	token, err := s.Store.Authenticate(r.Context(), cr)
 	if err != nil {
 		if errors.Is(err, postgres.ErrUniqueViolation) {
 			w.WriteHeader(http.StatusConflict)
@@ -109,7 +80,7 @@ func (s *Rest) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("[INFO] login %s logged LoginHook", c.Login)
+	log.Printf("[INFO] login %s logged LoginHook", cr.Login)
 	w.Header().Set("Authorization", token)
 	w.WriteHeader(http.StatusOK)
 }

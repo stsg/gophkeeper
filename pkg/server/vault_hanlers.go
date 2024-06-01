@@ -3,7 +3,6 @@ package server
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -17,6 +16,15 @@ import (
 	postgres "github.com/stsg/gophkeeper/pkg/store"
 )
 
+// VaultRoute returns an http.Handler that handles the routing for the vault API.
+//
+// It mounts the "/piece" and "/blob" routes to their respective handlers,
+// and defines GET and DELETE routes for "/" and "/{rid}" respectively.
+// The handlers for these routes are defined in the VaultPieceRoute, VaultBlobRoute,
+// VaultList, and VaultDelete methods of the Rest struct.
+//
+// Returns:
+// - http.Handler: The router that handles the vault API routing.
 func (s *Rest) VaultRoute() http.Handler {
 	router := chi.NewRouter()
 	router.Mount("/piece", s.VaultPieceRoute())
@@ -26,39 +34,52 @@ func (s *Rest) VaultRoute() http.Handler {
 	return router
 }
 
+// VaultList handles the HTTP GET request to list the resources in the vault.
+//
+// It expects the request to have the "Authorization" header containing a valid token.
+// The function retrieves the credentials from the store using the token.
+// If the credentials are not found or there is an error, it returns an appropriate HTTP error response.
+//
+// The function then retrieves the list of resources from the store using the credentials.
+// If there is an error, it returns an HTTP internal server error response.
+//
+// The function constructs the response by creating a slice of postgres.Resource structs,
+// with each struct containing the ID, meta, and type of a resource from the list.
+//
+// Finally, the function writes the response as JSON to the HTTP response writer with a status code of 200.
+// If there is an error encoding the response, it logs an error message.
 func (s *Rest) VaultList(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), s.Timeout)
-	defer cancel()
-
-	reqID := middleware.GetReqID(ctx)
+	reqID := middleware.GetReqID(r.Context())
 	log.Printf("[INFO] reqID %s VaultListHook", reqID)
 
+	// TODO: add auth as middleware
+	// https://github.com/stsg/gophkeeper/pull/1#discussion_r1618437264
 	token := r.Header.Get("Authorization")
-	creds, err := s.Store.Identity(ctx, token)
+	creds, err := s.Store.Identity(r.Context(), token)
 	if err != nil {
-		status := http.StatusInternalServerError
 		if errors.Is(err, postgres.ErrUserUnauthorized) {
-			status = http.StatusUnauthorized
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
 		}
-		http.Error(w, http.StatusText(status), status)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	resources, err := s.Store.List(ctx, creds)
+	resources, err := s.Store.List(r.Context(), creds)
 	if err != nil {
-		var status = http.StatusInternalServerError
-		http.Error(w, http.StatusText(status), status)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	var response = make([]map[string]any, 0, len(resources))
+	var response []postgres.Resource
+
 	for _, resource := range resources {
 		response = append(
 			response,
-			map[string]any{
-				"rid":  (int64)(resource.ID),
-				"meta": resource.Meta,
-				"type": (int)(resource.Type),
+			postgres.Resource{
+				ID:   resource.ID,
+				Meta: resource.Meta,
+				Type: resource.Type,
 			},
 		)
 	}
@@ -70,36 +91,32 @@ func (s *Rest) VaultList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Rest) VaultDelete(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), s.Timeout)
-	defer cancel()
-
-	reqID := middleware.GetReqID(ctx)
+	reqID := middleware.GetReqID(r.Context())
 	log.Printf("[INFO] reqID %s VaultDeleteHook", reqID)
 
 	token := r.Header.Get("Authorization")
-	creds, err := s.Store.Identity(ctx, token)
+	creds, err := s.Store.Identity(r.Context(), token)
 	if err != nil {
-		var status = http.StatusInternalServerError
 		if errors.Is(err, postgres.ErrUserUnauthorized) {
-			status = http.StatusUnauthorized
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
 		}
-		http.Error(w, http.StatusText(status), status)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	var rid, ridError = strconv.Atoi(chi.URLParam(r, "rid"))
 	if ridError != nil {
-		status := http.StatusBadRequest
-		http.Error(w, http.StatusText(status), status)
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
-	if err := s.Store.Delete(ctx, postgres.ResourceID(rid), creds); err != nil {
-		status := http.StatusInternalServerError
+	if err := s.Store.Delete(r.Context(), postgres.ResourceID(rid), creds); err != nil {
 		if errors.Is(err, postgres.ErrResourceNotFound) {
-			status = http.StatusNotFound
+			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+			return
 		}
-		http.Error(w, http.StatusText(status), status)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
@@ -114,56 +131,44 @@ func (s *Rest) VaultPieceRoute() http.Handler {
 }
 
 func (s *Rest) VaultPieceEncrypt(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), s.Timeout)
-	defer cancel()
-
-	reqID := middleware.GetReqID(ctx)
+	reqID := middleware.GetReqID(r.Context())
 	log.Printf("[INFO] reqID %s VaultDeleteHook", reqID)
 
 	token := r.Header.Get("Authorization")
-	creds, err := s.Store.Identity(ctx, token)
+	creds, err := s.Store.Identity(r.Context(), token)
 	if err != nil {
-		var status = http.StatusInternalServerError
 		if errors.Is(err, postgres.ErrUserUnauthorized) {
-			status = http.StatusUnauthorized
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
 		}
-		http.Error(w, http.StatusText(status), status)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	var request struct {
-		Meta    string `json:"meta"`
-		Content string `json:"content"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		var status = http.StatusBadRequest
-		http.Error(w, http.StatusText(status), status)
+	var piece postgres.Piece
+	if err := json.NewDecoder(r.Body).Decode(&piece); err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
-	var content = make([]byte, len(request.Content))
-	if _, err := base64.RawStdEncoding.Decode(content, ([]byte)(request.Content)); err != nil {
+	var content = make([]byte, len(piece.Content))
+	if _, err := base64.RawStdEncoding.Decode(content, ([]byte)(piece.Content)); err != nil {
 		var status = http.StatusBadRequest
 		http.Error(w, http.StatusText(status), status)
 		return
 	}
 
-	var piece = postgres.Piece{
-		Meta:    request.Meta,
-		Content: content,
-	}
-	var password = r.Header.Get("X-Password")
+	password := r.Header.Get("X-Password")
 	if password == "" {
-		var status = http.StatusUnauthorized
-		http.Error(w, http.StatusText(status), status)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
-	rid, err := s.Store.StorePiece(ctx, piece, creds)
+	rid, err := s.Store.StorePiece(r.Context(), piece, creds)
 	if err != nil {
-		var status = http.StatusInternalServerError
 		if errors.Is(err, postgres.ErrUserUnauthorized) {
-			status = http.StatusUnauthorized
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
 		}
-		http.Error(w, http.StatusText(status), status)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
@@ -178,59 +183,51 @@ func (s *Rest) VaultPieceEncrypt(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Rest) VaultPieceDecrypt(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), s.Timeout)
-	defer cancel()
-
-	reqID := middleware.GetReqID(ctx)
+	reqID := middleware.GetReqID(r.Context())
 	log.Printf("[INFO] reqID %s VaultPieceDecryptHook", reqID)
 
 	token := r.Header.Get("Authorization")
-	creds, err := s.Store.Identity(ctx, token)
+	creds, err := s.Store.Identity(r.Context(), token)
 	if err != nil {
-		var status = http.StatusInternalServerError
 		if errors.Is(err, postgres.ErrUserUnauthorized) {
-			status = http.StatusUnauthorized
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
 		}
-		http.Error(w, http.StatusText(status), status)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	creds.Passw = r.Header.Get("X-Password")
 	if creds.Passw == "" {
-		var status = http.StatusUnauthorized
-		http.Error(w, http.StatusText(status), status)
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return
 	}
 
 	rid, err := strconv.Atoi(chi.URLParam(r, "rid"))
 	if err != nil {
-		var status = http.StatusBadRequest
-		http.Error(w, http.StatusText(status), status)
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
-	piece, err := s.Store.RestorePiece(ctx, (postgres.ResourceID)(rid), creds)
+	piece, err := s.Store.RestorePiece(r.Context(), (postgres.ResourceID)(rid), creds)
 	if err != nil {
-		var status = http.StatusInternalServerError
 		if errors.Is(err, postgres.ErrUserUnauthorized) {
-			status = http.StatusUnauthorized
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
 		}
-		http.Error(w, http.StatusText(status), status)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	var response struct {
-		Meta    string `json:"meta"`
-		Content string `json:"content"`
-	}
+	var response postgres.Piece
 	response.Meta = piece.Meta
-	response.Content = base64.RawStdEncoding.EncodeToString(
+	response.Content = []byte(base64.RawStdEncoding.EncodeToString(
 		bytes.ReplaceAll(
 			piece.Content,
 			[]byte{'\x00'},
 			[]byte{},
 		),
-	)
+	))
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("[ERROR] failed to write response: %s", err.Error())
@@ -245,14 +242,10 @@ func (s *Rest) VaultBlobRoute() http.Handler {
 }
 
 func (s *Rest) VaultBLobEncrypt(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), s.Timeout)
-	defer cancel()
-
 	var creds postgres.Creds
 	creds.Passw = r.Header.Get("X-Password")
 	if creds.Passw == "" {
-		var status = http.StatusUnauthorized
-		http.Error(w, http.StatusText(status), status)
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return
 	}
 
@@ -260,13 +253,13 @@ func (s *Rest) VaultBLobEncrypt(w http.ResponseWriter, r *http.Request) {
 		Meta:    r.Header.Get("X-Meta"),
 		Content: r.Body,
 	}
-	rid, err := s.Store.StoreBlob(ctx, blob, creds)
+	rid, err := s.Store.StoreBlob(r.Context(), blob, creds)
 	if err != nil {
-		var status = http.StatusInternalServerError
 		if errors.Is(err, postgres.ErrUserUnauthorized) {
-			status = http.StatusUnauthorized
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
 		}
-		http.Error(w, http.StatusText(status), status)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
@@ -281,41 +274,36 @@ func (s *Rest) VaultBLobEncrypt(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Rest) VaultBLobDecrypt(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), s.Timeout)
-	defer cancel()
-
 	token := r.Header.Get("Authorization")
-	creds, err := s.Store.Identity(ctx, token)
+	creds, err := s.Store.Identity(r.Context(), token)
 	if err != nil {
-		var status = http.StatusInternalServerError
 		if errors.Is(err, postgres.ErrUserUnauthorized) {
-			status = http.StatusUnauthorized
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
 		}
-		http.Error(w, http.StatusText(status), status)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	rid, err := strconv.Atoi(chi.URLParam(r, "rid"))
 	if err != nil {
-		var status = http.StatusBadRequest
-		http.Error(w, http.StatusText(status), status)
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
 	creds.Passw = r.Header.Get("X-Password")
 	if creds.Passw == "" {
-		var status = http.StatusBadRequest
-		http.Error(w, http.StatusText(status), status)
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
-	blob, err := s.Store.RestoreBlob(ctx, (postgres.ResourceID)(rid), creds)
+	blob, err := s.Store.RestoreBlob(r.Context(), (postgres.ResourceID)(rid), creds)
 	if err != nil {
-		var status = http.StatusInternalServerError
 		if errors.Is(err, postgres.ErrUserUnauthorized) {
-			status = http.StatusUnauthorized
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
 		}
-		http.Error(w, http.StatusText(status), status)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 	defer blob.Content.Close()

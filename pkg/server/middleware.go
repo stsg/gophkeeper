@@ -12,6 +12,8 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 	log "github.com/go-pkgz/lgr"
+	"github.com/pkg/errors"
+	postgres "github.com/stsg/gophkeeper/pkg/store"
 )
 
 // JSON is a map alias, just for convenience
@@ -128,4 +130,43 @@ func Decompress() func(http.Handler) http.Handler {
 	}
 
 	return f
+}
+
+// Authorization middleware
+func Authorization() func(http.Handler) http.Handler {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("X-Password") == "" {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			h.ServeHTTP(w, r)
+		})
+	}
+}
+
+// Authorization middleware
+func AuthRequired(s *Rest) func(http.Handler) http.Handler {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			token := r.Header.Get("Authorization")
+			if token == "" {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			creds, err := s.Store.Identity(r.Context(), token)
+			if err != nil {
+				if errors.Is(err, postgres.ErrUserUnauthorized) {
+					http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+					return
+				}
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				return
+			}
+
+			r.Header.Set("X-Password", creds.Passw)
+			h.ServeHTTP(w, r)
+
+		})
+	}
 }
