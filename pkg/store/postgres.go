@@ -114,6 +114,7 @@ func (p *Storage) Register(ctx context.Context, c Creds) error {
 
 	return nil
 }
+
 func (p *Storage) Authenticate(ctx context.Context, c Creds) (t string, err error) {
 
 	if err := p.checkPass(ctx, c); err != nil {
