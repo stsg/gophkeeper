@@ -95,6 +95,7 @@ func main() {
 		Version:  revision,
 		Config:   conf,
 		Status:   &status.Host{},
+		Timeout:  opts.Timeout,
 		Store:    postgres,
 		Secret:   secret,
 		LifeSpan: opts.Lifespan,

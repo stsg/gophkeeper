@@ -23,6 +23,7 @@ type Rest struct {
 	Version  string
 	Status   Status
 	Config   *config.Parameters
+	Timeout  time.Duration
 	Store    *postgres.Storage
 	Secret   []byte
 	LifeSpan time.Duration
@@ -66,6 +67,7 @@ func (s *Rest) router() http.Handler {
 	router.Use(rest.AppInfo("gophkeeper", "sartorus", s.Version))
 	router.Use(rest.Ping)
 	router.Use(logger.New(logger.Log(log.Default()), logger.WithBody, logger.Prefix("[DEBUG]")).Handler)
+	router.Use(middleware.Timeout(s.Timeout))
 	router.Use(rest.Gzip("application/json", "text/html"))
 	router.Use(middleware.Compress(5, "application/json", "text/html"))
 	router.Use(rest.BasicAuth(s.Auth))
@@ -75,7 +77,7 @@ func (s *Rest) router() http.Handler {
 		r.Get("/status", s.status)
 		r.Post("/register", s.Register)
 		r.Post("/login", s.Login)
-		r.Post("/vault", s.Vault)
+		r.Mount("/vault", s.VaultRoute())
 	})
 
 	return router
@@ -116,7 +118,7 @@ func (s *Rest) Auth(login string, password string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	user, error := s.Store.GetUserByLogin(ctx, login)
+	user, error := s.Store.GetIdentity(ctx, login)
 	if error != nil {
 		log.Printf("[ERROR] failed to get user: %v", error)
 		return false

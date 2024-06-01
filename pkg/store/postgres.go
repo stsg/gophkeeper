@@ -2,11 +2,13 @@ package postgres
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"time"
 
 	log "github.com/go-pkgz/lgr"
-	"github.com/google/uuid"
+	"github.com/golang-jwt/jwt"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -15,9 +17,18 @@ import (
 	"github.com/stsg/gophkeeper/pkg/lib"
 )
 
+type Creds struct {
+	Login string `json:"username"`
+	Passw string `json:"password"`
+}
+
 type Storage struct {
-	cfg *Config
-	db  *pgxpool.Pool
+	cfg      *Config
+	db       *pgxpool.Pool
+	EncdP    *base64.Encoding
+	BlobsDir string
+	Secret   []byte
+	LifeSpan time.Duration
 }
 
 func (p *Storage) Close() {
@@ -66,59 +77,87 @@ func New(cfg *Config) (*Storage, error) {
 	return &Storage{cfg: cfg, db: pool}, nil
 }
 
-func (p *Storage) GetUserByLogin(ctx context.Context, login string) (User, error) {
-	var user User
+func (p *Storage) GetIdentity(ctx context.Context, login string) (Creds, error) {
+	var c Creds
 
 	err := p.db.QueryRow(
 		ctx,
 		"SELECT id, passw FROM identities WHERE id=$1", login).Scan(
-		&user.Login,
-		&user.Passw,
+		&c.Login,
+		&c.Passw,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return User{}, ErrNoExists
+			return Creds{}, ErrNoExists
 		}
-		return User{}, err
+		return Creds{}, err
 	}
-	return user, nil
-
+	return c, nil
 }
 
-func (p *Storage) GetUserByUUID(ctx context.Context, uid uuid.UUID) (User, error) {
-	var user User
-
-	err := p.db.QueryRow(
-		ctx,
-		"SELECT id, passw FROM users WHERE uid=$1", uid).Scan(
-		&user.Login,
-		&user.Passw,
-	)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return User{}, ErrNoExists
-		}
-		return User{}, err
-	}
-	return user, nil
-
-}
-
-func (p *Storage) CreateUser(ctx context.Context, user *User) (*User, error) {
+func (p *Storage) Register(ctx context.Context, c Creds) error {
 	_, err := p.db.Exec(
 		ctx,
-		"INSERT INTO users (uid, login, password) VALUES ($1, $2, $3)",
-		user.Login,
-		user.Passw,
+		"INSERT INTO identities (id, passw) VALUES ($1, $2)",
+		c.Login,
+		c.Passw,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
-			log.Printf("[ERROR] user %s already exists %v", user.Login, err)
-			return nil, ErrUserExists
+			log.Printf("[ERROR] user %s already exists %v", c.Login, err)
+			return ErrUniqueViolation
 		}
-		log.Printf("[ERROR] cannot create user %s %v", user.Login, err)
-		return nil, err
+		log.Printf("[ERROR] cannot create user %s %v", c.Login, err)
+		return err
 	}
-	return user, nil
+
+	return nil
+}
+func (p *Storage) Authenticate(ctx context.Context, c Creds) (t string, err error) {
+
+	if err := p.checkPass(ctx, c); err != nil {
+		return "", err
+	}
+
+	var rawToken = jwt.NewWithClaims(
+		jwt.SigningMethodHS256,
+		jwt.MapClaims{
+			"exp": time.Now().Add(p.LifeSpan).Unix(),
+			"sub": c.Passw,
+		},
+	)
+	var token, signTokenError = rawToken.SignedString(p.Secret)
+	if signTokenError != nil {
+		return "", signTokenError
+	}
+	return token, nil
+}
+
+func (p *Storage) Identity(ctx context.Context, t string) (c Creds, err error) {
+	var parsedToken, parseTokenError = jwt.Parse(
+		t,
+		func(t *jwt.Token) (interface{}, error) {
+			return p.Secret, nil
+		},
+	)
+	if parseTokenError != nil {
+		return Creds{}, ErrUserUnauthorized
+	}
+
+	var claims = parsedToken.Claims.(jwt.MapClaims)
+	if claims.Valid() != nil {
+		return Creds{}, ErrUserUnauthorized
+	}
+
+	sub := claims["sub"].(string)
+
+	var username string
+	if sub != "" {
+		username = sub
+	} else {
+		return Creds{}, ErrUserUnauthorized
+	}
+
+	return Creds{Login: username, Passw: ""}, nil
 }
