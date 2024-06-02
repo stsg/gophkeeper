@@ -15,21 +15,6 @@ import (
 	postgres "github.com/stsg/gophkeeper/pkg/store"
 )
 
-// type Client interface {
-// 	Run(ctx context.Context) error
-// 	Register() error
-// 	List() error
-// 	AddCredentials() error
-// 	GetCredentials() error
-// 	AddText() error
-// 	GetText() error
-// 	AddFile() error
-// 	GetFile() error
-// 	AddCard() error
-// 	GetCard() error
-// 	Delete() error
-// }
-
 var revision = "unknown"
 
 var opts struct {
