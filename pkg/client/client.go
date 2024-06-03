@@ -29,22 +29,10 @@ func (c *Client) Run(ctx context.Context) error {
 	switch c.Opts.Command {
 	case "list":
 		return c.List(ctx)
-	// case "add-credentials":
-	// 	return c.AddCredentials()
-	// case "get-credentials":
-	// 	return c.GetCredentials()
-	// case "add-text":
-	// 	return c.AddText()
-	// case "get-text":
-	// 	return c.GetText()
-	// case "add-file":
-	// 	return c.AddFile()
-	// case "get-file":
-	// 	return c.GetFile()
-	// case "add-card":
-	// 	return c.AddCard()
-	// case "get-card":
-	// 	return c.GetCard()
+	case "store-credentials":
+		return c.StoreCredentials(ctx)
+	case "restore-credentials":
+		return c.RestoreCredentials(ctx)
 	case "register":
 		return c.Register(ctx)
 	}

@@ -68,3 +68,33 @@ func (c *Client) Register(ctx context.Context) error {
 
 	return nil
 }
+
+func (c *Client) StoreCredentials(ctx context.Context) error {
+	_, err := c.authenticate(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = description(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = vaultPassword(ctx)
+	if err != nil {
+		return err
+	}
+
+	// TODO: store credentials
+
+	// TODO: store vault password
+	return nil
+}
+
+func (c *Client) RestoreCredentials(ctx context.Context) error {
+	_, err := c.authenticate(ctx)
+	if err != nil {
+		return err
+	}
+	// TODO: restore credentials
+	return nil
+}
