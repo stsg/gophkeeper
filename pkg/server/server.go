@@ -60,6 +60,13 @@ func (s *Rest) Run(ctx context.Context) error {
 	return httpServer.ListenAndServe()
 }
 
+// router returns an http.Handler that serves as the main router for the Rest server.
+//
+// It sets up middleware for request ID, real IP, request recovery, throttling, app info, ping,
+// logging, timeout, gzip compression, basic authentication, and defines routes for echo, status,
+// register, and login endpoints.
+//
+// Returns an http.Handler.
 func (s *Rest) router() http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID, middleware.RealIP, rest.Recoverer(log.Default()))

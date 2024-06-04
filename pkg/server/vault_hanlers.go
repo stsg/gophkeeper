@@ -90,6 +90,22 @@ func (s *Rest) VaultList(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// VaultDelete handles the HTTP DELETE request to delete a resource from the vault.
+//
+// It expects the request to have the "Authorization" header containing a valid token.
+// The function retrieves the credentials from the store using the token.
+// If the credentials are not found or there is an error, it returns an appropriate HTTP error response.
+//
+// The function then parses the "rid" parameter from the request URL and attempts to delete the resource with the corresponding ID from the store using the credentials.
+// If the resource is not found or there is an error, it returns an HTTP error response.
+//
+// If the deletion is successful, the function writes an HTTP status code of 200 to the response.
+//
+// Parameters:
+// - w: http.ResponseWriter - the HTTP response writer.
+// - r: *http.Request - the HTTP request.
+//
+// Return type: None.
 func (s *Rest) VaultDelete(w http.ResponseWriter, r *http.Request) {
 	reqID := middleware.GetReqID(r.Context())
 	log.Printf("[INFO] reqID %s VaultDeleteHook", reqID)
@@ -123,6 +139,12 @@ func (s *Rest) VaultDelete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// VaultPieceRoute returns an http.Handler that handles the routing for the vault piece API.
+//
+// It mounts the "/" route to the VaultPieceEncrypt method and the "/{rid}" route to the VaultPieceDecrypt method.
+//
+// Returns:
+// - http.Handler: The router that handles the vault piece API routing.
 func (s *Rest) VaultPieceRoute() http.Handler {
 	router := chi.NewRouter()
 	router.Put("/", s.VaultPieceEncrypt)
@@ -130,6 +152,22 @@ func (s *Rest) VaultPieceRoute() http.Handler {
 	return router
 }
 
+// VaultPieceEncrypt handles the encryption of a vault piece.
+//
+// It takes in an http.ResponseWriter and an http.Request as parameters.
+// The function retrieves the request ID from the context and logs it.
+// It then retrieves the authorization token from the request headers and uses it to authenticate the user.
+// If the authentication fails, an appropriate error response is returned.
+// The function decodes the request body into a postgres.Piece struct.
+// If the decoding fails, a bad request error response is returned.
+// The function decodes the piece content from base64.
+// If the decoding fails, a bad request error response is returned.
+// The function retrieves the password from the request headers.
+// If the password is missing, an internal server error response is returned.
+// The function stores the piece in the database using the provided credentials.
+// If the storage fails, an appropriate error response is returned.
+// Finally, the function writes the response with the stored piece's ID and encodes it as JSON.
+// If the encoding fails, an error message is logged.
 func (s *Rest) VaultPieceEncrypt(w http.ResponseWriter, r *http.Request) {
 	reqID := middleware.GetReqID(r.Context())
 	log.Printf("[INFO] reqID %s VaultDeleteHook", reqID)
@@ -182,6 +220,21 @@ func (s *Rest) VaultPieceEncrypt(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// VaultPieceDecrypt handles the decryption of a vault piece.
+//
+// It takes in an http.ResponseWriter and an http.Request as parameters.
+// The function retrieves the request ID from the context and logs it.
+// It then retrieves the authorization token from the request headers and uses it to authenticate the user.
+// If the authentication fails, an appropriate error response is returned.
+// The function retrieves the X-Password header from the request headers and assigns it to the creds.Passw field.
+// If the password is missing, an unauthorized error response is returned.
+// The function parses the "rid" URL parameter from the request and converts it to an integer.
+// If the parsing fails, a bad request error response is returned.
+// The function retrieves the vault piece with the specified resource ID from the database using the provided credentials.
+// If the retrieval fails, an appropriate error response is returned.
+// The function creates a response struct with the decrypted piece's metadata and encodes it as a base64-encoded string.
+// The function writes the response with the appropriate status code and encodes it as JSON.
+// If the encoding fails, an error message is logged.
 func (s *Rest) VaultPieceDecrypt(w http.ResponseWriter, r *http.Request) {
 	reqID := middleware.GetReqID(r.Context())
 	log.Printf("[INFO] reqID %s VaultPieceDecryptHook", reqID)
@@ -234,6 +287,12 @@ func (s *Rest) VaultPieceDecrypt(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// VaultBlobRoute returns an http.Handler that handles the routing for the vault blob API.
+//
+// It mounts the "/" route to the VaultBLobEncrypt method and the "/{rid}" route to the VaultBLobDecrypt method.
+//
+// Returns:
+// - http.Handler: The router that handles the vault blob API routing.
 func (s *Rest) VaultBlobRoute() http.Handler {
 	router := chi.NewRouter()
 	router.Put("/", s.VaultBLobEncrypt)
@@ -241,6 +300,18 @@ func (s *Rest) VaultBlobRoute() http.Handler {
 	return router
 }
 
+// VaultBLobEncrypt handles the encryption of a blob using the provided credentials.
+//
+// It takes an http.ResponseWriter and an http.Request as parameters.
+// The function retrieves the password from the request headers and checks if it is empty.
+// If the password is empty, it returns an HTTP 401 Unauthorized response.
+// It creates a postgres.Blob struct with the meta data from the request headers and the content from the request body.
+// It calls the StoreBlob method of the Rest struct's Store field to store the blob and returns the resource ID.
+// If an error occurs during the storage process, it checks if the error is postgres.ErrUserUnauthorized.
+// If it is, it returns an HTTP 401 Unauthorized response. Otherwise, it returns an HTTP 500 Internal Server Error response.
+// If the storage process is successful, it writes an HTTP 201 Created response to the http.ResponseWriter.
+// It creates a response struct with the resource ID and encodes it to JSON.
+// If an error occurs during the encoding process, it logs an error message.
 func (s *Rest) VaultBLobEncrypt(w http.ResponseWriter, r *http.Request) {
 	var creds postgres.Creds
 	creds.Passw = r.Header.Get("X-Password")
@@ -273,6 +344,21 @@ func (s *Rest) VaultBLobEncrypt(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// VaultBLobDecrypt decrypts a blob from the vault.
+//
+// It takes an http.ResponseWriter and an http.Request as parameters.
+// The function retrieves the password from the request headers and checks if it is empty.
+// If the password is empty, it returns an HTTP 401 Unauthorized response.
+// It retrieves the resource ID from the URL parameter "rid" and checks if it is valid.
+// If the resource ID is invalid, it returns an HTTP 400 Bad Request response.
+// It creates a postgres.Creds struct with the password from the request headers and calls the Identity method of the Rest struct's Store field to authenticate the user.
+// If an error occurs during the authentication process, it checks if the error is postgres.ErrUserUnauthorized.
+// If it is, it returns an HTTP 401 Unauthorized response. Otherwise, it returns an HTTP 500 Internal Server Error response.
+// It calls the RestoreBlob method of the Rest struct's Store field to retrieve the blob and returns the decrypted content.
+// If an error occurs during the retrieval process, it checks if the error is postgres.ErrUserUnauthorized.
+// If it is, it returns an HTTP 401 Unauthorized response. Otherwise, it returns an HTTP 500 Internal Server Error response.
+// It sets the appropriate headers in the http.ResponseWriter and writes the decrypted content.
+// If an error occurs during the writing process, it logs an error message.
 func (s *Rest) VaultBLobDecrypt(w http.ResponseWriter, r *http.Request) {
 	token := r.Header.Get("Authorization")
 	creds, err := s.Store.Identity(r.Context(), token)

@@ -72,6 +72,16 @@ func (rc *ComposedReadCloser) Close() error {
 	return rc.Closer.Close()
 }
 
+// StorePiece stores a piece of content in the database along with its metadata and owner information.
+//
+// Parameters:
+// - ctx: The context.Context object for the function.
+// - piece: The Piece struct containing the content and metadata of the piece.
+// - c: The Creds struct containing the credentials of the owner.
+//
+// Returns:
+// - ResourceID: The ID of the stored resource.
+// - error: An error if the storage operation fails.
 func (p *Storage) StorePiece(ctx context.Context, piece Piece, c Creds) (ResourceID, error) {
 	if err := p.checkPass(ctx, c); err != nil {
 		return -1, errors.Join(err, ErrUserUnauthorized)
@@ -130,6 +140,16 @@ func (p *Storage) StorePiece(ctx context.Context, piece Piece, c Creds) (Resourc
 	return (ResourceID)(rid), nil
 }
 
+// RestorePiece retrieves a piece of content and its metadata from the database based on the provided resource ID and credentials.
+//
+// Parameters:
+// - ctx: The context.Context object for the function.
+// - rid: The resource ID of the piece to be restored.
+// - c: The Creds struct containing the credentials of the owner.
+//
+// Returns:
+// - Piece: The restored piece of content with its metadata.
+// - error: An error if the restoration operation fails.
 func (p *Storage) RestorePiece(ctx context.Context, rid ResourceID, c Creds) (Piece, error) {
 	if err := p.checkPass(ctx, c); err != nil {
 		return Piece{}, errors.Join(err, ErrUserUnauthorized)
@@ -184,6 +204,14 @@ func (p *Storage) RestorePiece(ctx context.Context, rid ResourceID, c Creds) (Pi
 	return piece, nil
 }
 
+// StoreBlob stores a blob in the storage.
+//
+// It takes the following parameters:
+// - ctx: the context.Context object for controlling the execution flow.
+// - blob: the Blob object containing the content to be stored.
+// - c: the Creds object containing the credentials for authentication.
+//
+// It returns the ResourceID of the stored blob and an error if any.
 func (p *Storage) StoreBlob(ctx context.Context, blob Blob, c Creds) (ResourceID, error) {
 	defer blob.Content.Close()
 	if err := p.checkPass(ctx, c); err != nil {
@@ -271,6 +299,16 @@ func (p *Storage) StoreBlob(ctx context.Context, blob Blob, c Creds) (ResourceID
 	return (ResourceID)(rid), nil
 }
 
+// RestoreBlob retrieves a blob from the storage based on the provided resource ID and credentials.
+//
+// Parameters:
+// - ctx: the context.Context object for controlling the execution flow.
+// - rid: the ResourceID of the blob to be restored.
+// - c: the Creds object containing the credentials for authentication.
+//
+// Returns:
+// - Blob: the restored blob.
+// - error: an error if the blob retrieval fails.
 func (p *Storage) RestoreBlob(ctx context.Context, rid ResourceID, c Creds) (Blob, error) {
 	if err := p.checkPass(ctx, c); err != nil {
 		return Blob{}, errors.Join(err, ErrUserUnauthorized)
@@ -327,6 +365,14 @@ func (p *Storage) RestoreBlob(ctx context.Context, rid ResourceID, c Creds) (Blo
 	return blob, nil
 }
 
+// Delete deletes a resource from the database.
+//
+// It takes the following parameters:
+// - ctx: the context.Context object for the function.
+// - rid: the ResourceID of the resource to be deleted.
+// - c: the Creds object containing the login information of the owner of the resource.
+//
+// It returns an error if there was a problem deleting the resource.
 func (p *Storage) Delete(ctx context.Context, rid ResourceID, c Creds) error {
 	var transaction, transactionError = p.db.Begin(ctx)
 	if transactionError != nil {
@@ -383,6 +429,12 @@ func (p *Storage) Delete(ctx context.Context, rid ResourceID, c Creds) error {
 	return nil
 }
 
+// List retrieves a list of resources owned by the given credentials from the storage.
+//
+// ctx: The context.Context object for the request.
+// c: The Creds object containing the login of the owner.
+// []Resource: A slice of Resource objects representing the resources owned by the owner.
+// error: An error object if there was an issue retrieving the resources.
 func (p *Storage) List(ctx context.Context, c Creds) ([]Resource, error) {
 	var selectResourcesResult, selectResourcesResultError = p.db.Query(
 		ctx,
@@ -410,6 +462,11 @@ func (p *Storage) List(ctx context.Context, c Creds) ([]Resource, error) {
 	return resources, nil
 }
 
+// checkPass checks the password for the given credentials in the Storage.
+//
+// ctx: The context.Context object for the request.
+// c: The Creds object containing the login and password to be checked.
+// error: An error object if there was an issue checking the password.
 func (p *Storage) checkPass(ctx context.Context, c Creds) error {
 	var row = p.db.QueryRow(
 		ctx,
