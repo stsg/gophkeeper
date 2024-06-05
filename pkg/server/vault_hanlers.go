@@ -27,10 +27,10 @@ import (
 // - http.Handler: The router that handles the vault API routing.
 func (s *Rest) VaultRoute() http.Handler {
 	router := chi.NewRouter()
-	router.Mount("/piece", s.VaultPieceRoute())
-	router.Mount("/blob", s.VaultBlobRoute())
 	router.Get("/", s.VaultList)
 	router.Delete("/{rid}", s.VaultDelete)
+	router.Mount("/piece", s.VaultPieceRoute())
+	router.Mount("/blob", s.VaultBlobRoute())
 	return router
 }
 
@@ -170,7 +170,7 @@ func (s *Rest) VaultPieceRoute() http.Handler {
 // If the encoding fails, an error message is logged.
 func (s *Rest) VaultPieceEncrypt(w http.ResponseWriter, r *http.Request) {
 	reqID := middleware.GetReqID(r.Context())
-	log.Printf("[INFO] reqID %s VaultDeleteHook", reqID)
+	log.Printf("[INFO] reqID %s VaultPieceEncryptHook", reqID)
 
 	token := r.Header.Get("Authorization")
 	creds, err := s.Store.Identity(r.Context(), token)
@@ -313,6 +313,9 @@ func (s *Rest) VaultBlobRoute() http.Handler {
 // It creates a response struct with the resource ID and encodes it to JSON.
 // If an error occurs during the encoding process, it logs an error message.
 func (s *Rest) VaultBLobEncrypt(w http.ResponseWriter, r *http.Request) {
+	reqID := middleware.GetReqID(r.Context())
+	log.Printf("[INFO] reqID %s VaultBlobEncryptHook", reqID)
+
 	var creds postgres.Creds
 	creds.Passw = r.Header.Get("X-Password")
 	if creds.Passw == "" {
@@ -360,6 +363,8 @@ func (s *Rest) VaultBLobEncrypt(w http.ResponseWriter, r *http.Request) {
 // It sets the appropriate headers in the http.ResponseWriter and writes the decrypted content.
 // If an error occurs during the writing process, it logs an error message.
 func (s *Rest) VaultBLobDecrypt(w http.ResponseWriter, r *http.Request) {
+	reqID := middleware.GetReqID(r.Context())
+	log.Printf("[INFO] reqID %s VaultBlobDecryptHook", reqID)
 	token := r.Header.Get("Authorization")
 	creds, err := s.Store.Identity(r.Context(), token)
 	if err != nil {

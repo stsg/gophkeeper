@@ -33,13 +33,15 @@ import (
 // Returns: None
 func (s *Rest) Register(w http.ResponseWriter, r *http.Request) {
 	var cr postgres.Creds
-	if err := json.NewDecoder(r.Body).Decode(&cr); err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return
-	}
 
 	reqID := middleware.GetReqID(r.Context())
 	log.Printf("[INFO] reqID %s RegisterHook", reqID)
+
+	if err := json.NewDecoder(r.Body).Decode(&cr); err != nil {
+		log.Printf("[INFO] reqID %s RegisterHook", reqID)
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
 
 	if cr.Login == "" {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)

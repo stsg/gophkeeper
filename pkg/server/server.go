@@ -77,14 +77,14 @@ func (s *Rest) router() http.Handler {
 	router.Use(middleware.Timeout(s.Timeout))
 	router.Use(rest.Gzip("application/json", "text/html"))
 	router.Use(middleware.Compress(5, "application/json", "text/html"))
-	router.Use(rest.BasicAuth(s.Auth))
+	// TODO: add additional auth
 
 	router.Route("/", func(r chi.Router) {
+		r.Mount("/vault", s.VaultRoute())
 		r.Get("/echo", s.echo)
 		r.Get("/status", s.status)
 		r.Post("/register", s.Register)
 		r.Post("/login", s.Login)
-		r.Mount("/vault", s.VaultRoute())
 	})
 
 	return router
