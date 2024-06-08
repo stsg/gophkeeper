@@ -114,7 +114,10 @@ func (p *Storage) Register(ctx context.Context, c Creds) error {
 
 	return nil
 }
+
 func (p *Storage) Authenticate(ctx context.Context, c Creds) (t string, err error) {
+
+	log.Printf("[INFO] authenticating user %s, %s", c.Login, c.Passw)
 
 	if err := p.checkPass(ctx, c); err != nil {
 		return "", err

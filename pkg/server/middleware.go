@@ -36,6 +36,23 @@ const UserContextKey ContextKey = "user"
 
 var reMultWhtsp = regexp.MustCompile(`[\s\p{Zs}]{2,}`)
 
+// Logger returns a middleware function that logs HTTP requests.
+//
+// It takes a logger (l) and a variadic parameter of LoggerFlags. The LoggerFlags
+// determine what parts of the request to log. The function returns an http.Handler
+// that wraps the provided http.Handler.
+//
+// The middleware function logs the following information:
+// - HTTP method
+// - URL
+// - Remote address
+// - HTTP status code
+// - Bytes written
+// - Time taken
+// - Request body (if LogBody flag is set)
+//
+// The log message is formatted as follows:
+// "[INFO] REST {HTTP method} - {URL} - {Remote address} - {HTTP status code} ({Bytes written}) - {Time taken} {Request body}"
 // Logger middleware prints http log. Customized by set of LoggerFlag
 func Logger(l log.L, flags ...LoggerFlag) func(http.Handler) http.Handler {
 
@@ -93,7 +110,21 @@ func Logger(l log.L, flags ...LoggerFlag) func(http.Handler) http.Handler {
 	return f
 }
 
-// Decompress middleware
+// Decompress is a middleware function that decompresses the request body if it is gzip-encoded.
+//
+// It takes an http.Handler as input and returns an http.Handler.
+// The returned http.Handler is responsible for handling the decompressed request.
+//
+// If the request body is gzip-encoded, it reads the compressed data from the request body,
+// decompresses it, and replaces the original request body with the decompressed data.
+// It also sets the "Content-Length" header to the length of the decompressed data.
+//
+// If there is an error during decompression, it sets the response status to 400 (Bad Request)
+// and writes the error message to the response body.
+//
+// If the request body is not gzip-encoded, it simply passes the request to the next handler in the chain.
+//
+// The function logs a message indicating that the Decompress middleware is enabled.
 func Decompress() func(http.Handler) http.Handler {
 
 	log.Print("Decompress middleware enabled")
@@ -132,7 +163,18 @@ func Decompress() func(http.Handler) http.Handler {
 	return f
 }
 
-// Authorization middleware
+// Authorization returns a middleware function that checks for authorization.
+//
+// The middleware function takes an http.Handler as input and returns an http.Handler.
+// The returned http.Handler checks if the "X-Password" header is present in the request.
+// If the header is missing, it returns a 401 Unauthorized status code.
+// If the header is present, it calls the next handler in the chain.
+//
+// Parameters:
+// - h: The http.Handler to be wrapped by the middleware.
+//
+// Returns:
+// - An http.Handler that performs authorization checks.
 func Authorization() func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -145,7 +187,8 @@ func Authorization() func(http.Handler) http.Handler {
 	}
 }
 
-// Authorization middleware
+// Authorization candidate to middleware
+// TODO -
 func AuthRequired(s *Rest) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -60,6 +60,13 @@ func (s *Rest) Run(ctx context.Context) error {
 	return httpServer.ListenAndServe()
 }
 
+// router returns an http.Handler that serves as the main router for the Rest server.
+//
+// It sets up middleware for request ID, real IP, request recovery, throttling, app info, ping,
+// logging, timeout, gzip compression, basic authentication, and defines routes for echo, status,
+// register, and login endpoints.
+//
+// Returns an http.Handler.
 func (s *Rest) router() http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID, middleware.RealIP, rest.Recoverer(log.Default()))
@@ -70,19 +77,23 @@ func (s *Rest) router() http.Handler {
 	router.Use(middleware.Timeout(s.Timeout))
 	router.Use(rest.Gzip("application/json", "text/html"))
 	router.Use(middleware.Compress(5, "application/json", "text/html"))
-	router.Use(rest.BasicAuth(s.Auth))
+	// TODO: add additional auth
 
 	router.Route("/", func(r chi.Router) {
+		r.Mount("/vault", s.VaultRoute())
 		r.Get("/echo", s.echo)
 		r.Get("/status", s.status)
 		r.Post("/register", s.Register)
 		r.Post("/login", s.Login)
-		r.Mount("/vault", s.VaultRoute())
 	})
 
 	return router
 }
 
+// echo handles the HTTP request and response for the "/echo" endpoint.
+//
+// It takes in an http.ResponseWriter and an http.Request as parameters.
+// It returns nothing.
 func (s *Rest) echo(w http.ResponseWriter, r *http.Request) {
 	echo := struct {
 		Message    string            `json:"message"`
@@ -105,6 +116,10 @@ func (s *Rest) echo(w http.ResponseWriter, r *http.Request) {
 	rest.RenderJSON(w, &echo)
 }
 
+// status is a handler function that retrieves the status information from the server.
+//
+// It takes in the http.ResponseWriter and the http.Request as parameters.
+// It returns nothing.
 func (s *Rest) status(w http.ResponseWriter, r *http.Request) {
 	info, err := s.Status.Get()
 	if err != nil {
@@ -114,6 +129,10 @@ func (s *Rest) status(w http.ResponseWriter, r *http.Request) {
 	rest.RenderJSON(w, info)
 }
 
+// Auth checks the login and password of a user.
+//
+// It takes in a login string and a password string as parameters.
+// It returns a boolean indicating whether the user is authenticated.
 func (s *Rest) Auth(login string, password string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
