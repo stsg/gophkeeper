@@ -90,6 +90,10 @@ func (s *Rest) router() http.Handler {
 	return router
 }
 
+// echo handles the HTTP request and response for the "/echo" endpoint.
+//
+// It takes in an http.ResponseWriter and an http.Request as parameters.
+// It returns nothing.
 func (s *Rest) echo(w http.ResponseWriter, r *http.Request) {
 	echo := struct {
 		Message    string            `json:"message"`
@@ -112,6 +116,10 @@ func (s *Rest) echo(w http.ResponseWriter, r *http.Request) {
 	rest.RenderJSON(w, &echo)
 }
 
+// status is a handler function that retrieves the status information from the server.
+//
+// It takes in the http.ResponseWriter and the http.Request as parameters.
+// It returns nothing.
 func (s *Rest) status(w http.ResponseWriter, r *http.Request) {
 	info, err := s.Status.Get()
 	if err != nil {
@@ -121,6 +129,10 @@ func (s *Rest) status(w http.ResponseWriter, r *http.Request) {
 	rest.RenderJSON(w, info)
 }
 
+// Auth checks the login and password of a user.
+//
+// It takes in a login string and a password string as parameters.
+// It returns a boolean indicating whether the user is authenticated.
 func (s *Rest) Auth(login string, password string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
